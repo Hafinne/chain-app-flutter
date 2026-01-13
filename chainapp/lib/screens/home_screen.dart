@@ -1,19 +1,21 @@
-import 'dart:async'; // For StreamSubscription
-import 'dart:ui'; // For Glassmorphism effects
-import 'dart:convert'; // For JSON decoding
+import 'dart:async'; // StreamSubscription için
+import 'dart:ui'; // Glassmorphism efektleri için
+import 'dart:convert'; // JSON işlemleri için
+import 'dart:math'; // Konfeti yönü için
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http; // 🔥 Added for API
+import 'package:http/http.dart' as http; // API için
+import 'package:confetti/confetti.dart'; // 🔥 KÜTÜPHANE
 
-// Services and Models
+// Servisler ve Modeller
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../models/chain_model.dart';
 import '../models/chain_log_model.dart';
 
-// Other Screens
+// Diğer Sayfalar
 import 'chain_hub_screen.dart';
 import 'profile_screen.dart';
 import 'timer_screen.dart';
@@ -40,27 +42,34 @@ class _HomeScreenState extends State<HomeScreen> {
   TimeOfDay? _notificationTime;
   StreamSubscription? _nudgeSubscription;
 
-  // 🔥 Variables for the Motivation Quote
+  // Motivasyon Sözü Değişkeni
   Future<Map<String, String>>? _dailyQuote;
+
+  // 🔥 KONFETİ KONTROLCÜSÜ
+  late ConfettiController _confettiController;
 
   @override
   void initState() {
     super.initState();
+    // Konfeti süresi (2 saniye patlasın)
+    _confettiController =
+        ConfettiController(duration: const Duration(seconds: 2));
+
     _listenForNudges();
-    // 🔥 Fetch the quote when screen initializes
+    // Sözü çek
     _dailyQuote = _fetchDailyQuote();
   }
 
   @override
   void dispose() {
     _nudgeSubscription?.cancel();
+    _confettiController.dispose(); // 🔥 Hafızayı temizle
     super.dispose();
   }
 
-  // 🔥 FETCH DATA FROM API
+  // --- API'DEN SÖZ ÇEKME ---
   Future<Map<String, String>> _fetchDailyQuote() async {
     try {
-      // Using ZenQuotes random endpoint to ensure variety for each user
       final response =
           await http.get(Uri.parse('https://zenquotes.io/api/random'));
       if (response.statusCode == 200) {
@@ -83,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // --- DÜRTME DİNLEYİCİSİ ---
   void _listenForNudges() {
     final userId = _auth.currentUser?.uid;
     if (userId == null) return;
@@ -128,10 +138,12 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // --- ANA AKSİYON (CHECK-IN / REPAIR) ---
   Future<void> _handleAction(ChainModel chain) async {
     final userId = _auth.currentUser?.uid;
     if (userId == null) return;
 
+    // --- DURUM 1: TAMİR (REPAIR) ---
     if (chain.status == 'broken') {
       try {
         final batch = FirebaseFirestore.instance.batch();
@@ -158,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    // --- DURUM 2: CHECK-IN ---
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -181,6 +194,9 @@ class _HomeScreenState extends State<HomeScreen> {
         final newLog = ChainLog(
             userId: userId, logDate: DateTime.now(), note: "Manual Check-in");
         await _firestoreService.performCheckIn(chain.id, userId, newLog);
+
+        // 🔥 PLAY CONFETTI ON SUCCESS
+        _confettiController.play();
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -189,6 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // --- BİLDİRİM SAATİ ---
   Future<void> _pickTime() async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
@@ -227,6 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // --- DÜRTME PENCERESİ ---
   void _showNudgeDialog(
       String memberId, String userName, String chainId, String chainName) {
     final TextEditingController messageController = TextEditingController();
@@ -297,9 +315,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- ZİNCİR HALKASI ---
   Widget _buildChainNode(
       String dayNum, bool isDone, bool isToday, bool isLast) {
-    // Renk ve Stil Tanımlamaları (Temayı buraya topladık)
     final Color doneColor = Colors.greenAccent;
     final Color activeColor = Colors.white;
     final Color inactiveColor = Colors.white24;
@@ -309,40 +327,34 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // 1. BAĞLANTI ÇİZGİSİ (Zincir Halkası)
           if (!isLast)
             Positioned(
               right: 0,
-              left: 30, // Node'un merkezinden başlat
+              left: 30,
               child: Container(
-                height: 3, // Çizgi kalınlığı
+                height: 3,
                 decoration: BoxDecoration(
                   color: isDone ? doneColor.withOpacity(0.5) : inactiveColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
-
-          // 2. ANA DAİRE (Node)
           Container(
             width: 45,
             height: 45,
             decoration: BoxDecoration(
-              // Arka plan: Tamamlandıysa yeşil, bugünse hafif beyaz, değilse şeffaf
               color: isDone
                   ? Colors.green.withOpacity(0.8)
                   : (isToday
                       ? Colors.white.withOpacity(0.1)
                       : Colors.transparent),
               shape: BoxShape.circle,
-              // Kenarlık: Tamamlandıysa parlak yeşil, bugünse düz beyaz, değilse mat
               border: Border.all(
                 color: isDone
                     ? doneColor
                     : (isToday ? activeColor : inactiveColor),
                 width: (isToday || isDone) ? 2 : 1,
               ),
-              // Gölgelendirme: Sadece tamamlananlar için yeşil parlama
               boxShadow: isDone
                   ? [
                       BoxShadow(
@@ -379,6 +391,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- ÜYE AVATARI ---
   Widget _buildMemberAvatar(
       String memberId, bool isCompleted, String chainId, String chainName) {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
@@ -409,10 +422,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                 : Colors.redAccent.withOpacity(0.6),
                             width: 2.5)),
                     child: CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.black26,
-                        backgroundImage: NetworkImage(
-                            "https://api.dicebear.com/9.x/adventurer/png?seed=$avatarSeed&backgroundColor=b6e3f4")),
+                      radius: 24,
+                      backgroundColor: Colors.black26,
+                      backgroundImage: NetworkImage(
+                          "https://api.dicebear.com/9.x/adventurer/png?seed=$avatarSeed&backgroundColor=b6e3f4"),
+                    ),
                   ),
                   if (!isCompleted && !isMe)
                     Positioned(
@@ -445,9 +459,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- ALT MENÜ ---
   Widget _buildBottomBar(BuildContext context, ChainModel chain) {
     return Container(
-      height: 85, // Biraz daha pay bıraktık
+      height: 85,
       decoration: BoxDecoration(
           color: const Color(0xFF0F172A),
           border:
@@ -455,32 +470,22 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // 1. SOL: Timer Butonu (Daha sade icon haline getirildi)
           IconButton(
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ChainTimerScreen(
-                    chainId: widget.chainId,
-                    chainName: widget.chainName,
-                  ),
+                  builder: (_) => const TimerScreen(),
                 ),
               );
             },
             icon: const Icon(Icons.timer, color: Colors.white70, size: 30),
           ),
-
-          // 2. ORTA: Home Butonu (Daha büyük ve öne çıkan tasarım)
           GestureDetector(
             onTap: () {
-              // 1. KONTROL: Eğer mevcut widget HomeScreen ise hiçbir şey yapma
-              // (Bu kontrol, metodun çağrıldığı yerdeki context'in hangi sayfaya ait olduğuna bakar)
               if (context.findAncestorWidgetOfExactType<HomeScreen>() != null) {
                 return;
               }
-
-              // 2. NAVİGASYON: Eğer HomeScreen'de değilsek yönlendir
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(
@@ -511,8 +516,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Icon(Icons.home_filled, color: Colors.white, size: 32),
             ),
           ),
-
-          // 3. SAĞ: Profile Butonu
           IconButton(
             onPressed: () {
               Navigator.push(
@@ -623,7 +626,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             scrollDirection: Axis.horizontal,
                             itemCount: 7,
                             itemBuilder: (context, index) {
-                              // Düğümün tarihini hesapla
                               final nodeDate = DateTime.now()
                                   .subtract(Duration(days: 3 - index));
                               final nodeDateStr =
@@ -636,12 +638,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               bool isDone = false;
 
                               if (isToday) {
-                                // Bugün için: Giriş yapan kullanıcılar listesinde ben var mıyım?
                                 isDone = chain.membersCompletedToday
                                     .contains(currentUserId);
                               } else if (!isFuture) {
-                                // Geçmiş günler için: Grup bu tarihi başarıyla tamamladı mı?
-                                // (completedDates listesi Firestore'dan geliyor olmalı)
                                 isDone = (chain.completedDates ?? [])
                                     .contains(nodeDateStr);
                               }
@@ -799,10 +798,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                         overflow: TextOverflow.ellipsis)
                                   ])),
                         ),
-
                         const SizedBox(height: 30),
 
-                        // 🔥 NEW: DYNAMIC MOTIVATION QUOTE FROM API
+                        // 🔥 MOTIVATION QUOTE CARD
                         FutureBuilder<Map<String, String>>(
                           future: _dailyQuote,
                           builder: (context, quoteSnapshot) {
@@ -863,6 +861,27 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 50),
                       ],
                     ),
+                  ),
+                ),
+
+                // 🔥 CONFETTI WIDGET ON TOP OF EVERYTHING
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: ConfettiWidget(
+                    confettiController: _confettiController,
+                    blastDirection: pi / 2, // Downwards
+                    maxBlastForce: 5,
+                    minBlastForce: 2,
+                    emissionFrequency: 0.05,
+                    numberOfParticles: 20,
+                    gravity: 0.2,
+                    colors: const [
+                      Colors.green,
+                      Colors.blue,
+                      Colors.pink,
+                      Colors.orange,
+                      Colors.purple
+                    ],
                   ),
                 ),
               ],

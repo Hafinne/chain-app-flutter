@@ -1,18 +1,10 @@
+import 'dart:ui'; // Font özellikleri için
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/Timer_service.dart';
-import 'home_screen.dart';
-import 'profile_screen.dart';
 
-class ChainTimerScreen extends StatelessWidget {
-  final String chainId;
-  final String chainName;
-
-  const ChainTimerScreen({
-    super.key,
-    required this.chainId,
-    required this.chainName,
-  });
+class TimerScreen extends StatelessWidget {
+  const TimerScreen({super.key});
 
   String _formatTime(int seconds) {
     int m = seconds ~/ 60;
@@ -20,145 +12,237 @@ class ChainTimerScreen extends StatelessWidget {
     return "${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
   }
 
-  Widget _buildBottomBar(BuildContext context) {
-    return Container(
-      height: 85,
-      decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
-          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1)))),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          // 1. SOL: Timer Butonu (Şu an buradayız, tıklanırsa hiçbir şey yapmaz)
-          IconButton(
-            onPressed: () {
-              // Zaten Timer sayfasındayız, bir şey yapmaya gerek yok.
-            },
-            icon: const Icon(Icons.timer, color: Colors.cyanAccent, size: 30), // Aktif olduğu için rengi farklı
-          ),
+  @override
+  Widget build(BuildContext context) {
+    final timerProvider = context.watch<TimerProvider>();
 
-          // 2. ORTA: Home Butonu (Öne Çıkan Tasarım)
-          GestureDetector(
-            onTap: () {
-              // Eğer HomeScreen'e gitmek istiyorsak stack'i temizleyip gitmeliyiz
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => HomeScreen(
-                    chainId: chainId,
-                    chainName: chainName,
-                  ),
-                ),
-                (route) => false,
-              );
-            },
-            child: Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1F3D78),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blueAccent.withOpacity(0.3),
-                    spreadRadius: 2,
-                    blurRadius: 10,
-                  )
+    // İlerleme yüzdesi hesapla
+    int totalSeconds = timerProvider.selectedMinutes * 60;
+    double progress =
+        totalSeconds == 0 ? 0 : timerProvider.remainingSeconds / totalSeconds;
+
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text("Focus Mode",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. ARKA PLAN (Gradient)
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF0A0E25),
+                  Color(0xFF1F3D78),
+                  Color(0xFF6C5ECF),
                 ],
-                border: Border.all(color: Colors.white24, width: 2),
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
-              child: const Icon(Icons.home_filled, color: Colors.white, size: 32),
             ),
           ),
 
-          // 3. SAĞ: Profile Butonu
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProfileScreen(
-                    selectedChainId: chainId,
-                    selectedChainName: chainName,
+          // 2. İÇERİK
+          SafeArea(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // 🔥 SANA LAZIM OLAN KISIM BURASI:
+                // Alarm çalıyorsa EKRANI DEĞİŞTİRİYORUZ.
+                if (timerProvider.isAlarmActive) ...[
+                  // --- ALARM MODU ---
+                  const Icon(Icons.alarm_on,
+                      size: 100, color: Colors.redAccent),
+                  const SizedBox(height: 20),
+                  const Text("TIME IS UP!",
+                      style: TextStyle(
+                          fontSize: 40,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                  const SizedBox(height: 10),
+                  const Text("Don't break the chain, you're amazing!",
+                      style: TextStyle(color: Colors.white70, fontSize: 16)),
+                  const SizedBox(height: 50),
+
+                  // KOCAMAN SUSTUR BUTONU
+                  GestureDetector(
+                    onTap: () => timerProvider.stopAlarm(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 50, vertical: 20),
+                      decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(50),
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.red.withOpacity(0.6),
+                                blurRadius: 30,
+                                spreadRadius: 5)
+                          ]),
+                      child: const Text("STOP ALARM",
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  )
+                ] else ...[
+                  // --- NORMAL SAYAÇ MODU (Modern Halka) ---
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Arka iz (Gri halka)
+                      SizedBox(
+                        width: 280,
+                        height: 280,
+                        child: CircularProgressIndicator(
+                          value: 1.0,
+                          color: Colors.white.withOpacity(0.1),
+                          strokeWidth: 20,
+                        ),
+                      ),
+                      // Ön doluluk (Renkli halka)
+                      SizedBox(
+                        width: 280,
+                        height: 280,
+                        child: CircularProgressIndicator(
+                          value: progress,
+                          color: const Color(0xFFA68FFF), // Mor Tema
+                          backgroundColor: Colors.transparent,
+                          strokeWidth: 20,
+                          strokeCap: StrokeCap.round,
+                        ),
+                      ),
+                      // Ortadaki Yazı
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                              timerProvider.isRunning
+                                  ? "Focusing..."
+                                  : "Are you ready?",
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.6),
+                                  fontSize: 16,
+                                  letterSpacing: 1.5)),
+                          const SizedBox(height: 10),
+                          Text(
+                            _formatTime(timerProvider.remainingSeconds),
+                            style: const TextStyle(
+                              fontSize: 60,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontFeatures: [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.person, color: Colors.white70, size: 32),
+
+                  const SizedBox(height: 60),
+
+                  // SÜRE AYARLAMA (+ ve -)
+                  if (!timerProvider.isRunning)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 40),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(30),
+                        border:
+                            Border.all(color: Colors.white.withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildTimeControl(
+                              icon: Icons.remove,
+                              onTap: () => timerProvider.setMinutes(
+                                  timerProvider.selectedMinutes - 1)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Text("${timerProvider.selectedMinutes} Dk",
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                          _buildTimeControl(
+                              icon: Icons.add,
+                              onTap: () => timerProvider.setMinutes(
+                                  timerProvider.selectedMinutes + 1)),
+                        ],
+                      ),
+                    ),
+
+                  // BAŞLAT / DURAKLAT BUTONU
+                  GestureDetector(
+                    onTap: () => timerProvider.toggleTimer(),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 60, vertical: 20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: timerProvider.isRunning
+                              ? [Colors.orangeAccent, Colors.deepOrange]
+                              : [
+                                  const Color(0xFFA68FFF),
+                                  const Color(0xFF6C5ECF)
+                                ],
+                        ),
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: timerProvider.isRunning
+                                ? Colors.orange.withOpacity(0.4)
+                                : const Color(0xFFA68FFF).withOpacity(0.4),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        timerProvider.isRunning ? "PAUSE" : "START",
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            letterSpacing: 1.2),
+                      ),
+                    ),
+                  ),
+                ], // else bloğu sonu
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final timerProvider = context.watch<TimerProvider>();
-
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0A0E25),
-        bottomNavigationBar: _buildBottomBar(context), // Parametre düzeltildi
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          title: const Text("Focus Mode"),
-          leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => Navigator.pop(context)),
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (!timerProvider.isRunning)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline,
-                          color: Colors.cyanAccent, size: 35),
-                      onPressed: () => timerProvider
-                          .setMinutes(timerProvider.selectedMinutes - 1),
-                    ),
-                    Text("${timerProvider.selectedMinutes} Minutes",
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 18)),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline,
-                          color: Colors.cyanAccent, size: 35),
-                      onPressed: () => timerProvider
-                          .setMinutes(timerProvider.selectedMinutes + 1),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 40),
-              Text(_formatTime(timerProvider.remainingSeconds),
-                  style: const TextStyle(
-                      fontSize: 80,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 60),
-              GestureDetector(
-                onTap: () => timerProvider.toggleTimer(),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(30),
-                    gradient: const LinearGradient(
-                        colors: [Colors.cyanAccent, Colors.blueAccent]),
-                  ),
-                  child: Text(timerProvider.isRunning ? "PAUSE" : "START",
-                      style: const TextStyle(
-                          color: Colors.black,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18)),
-                ),
-              ),
-            ],
-          ),
-        ),
+  // Küçük buton widget'ı (+ ve - için)
+  Widget _buildTimeControl(
+      {required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
+        child: Icon(icon, color: Colors.white, size: 24),
       ),
     );
   }

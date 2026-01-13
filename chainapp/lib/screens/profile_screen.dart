@@ -1,22 +1,22 @@
-import 'dart:ui'; // For Glassmorphism effects
+import 'dart:ui'; // Glassmorphism efektleri için
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// Models and Services
+// Modeller ve Servisler
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
 
-// Other Screens
+// Diğer Sayfalar
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 import 'home_screen.dart';
 import 'settings_screen.dart';
 import 'timer_screen.dart';
-import 'chain_hub_screen.dart';
+// import 'chain_hub_screen.dart'; // Gerekirse ekle
 
 class ProfileScreen extends StatelessWidget {
-  // 🔥 Parameters to remember the specific chain context
+  // 🔥 Hangi zincirden gelindiğini hatırlamak için
   final String selectedChainId;
   final String selectedChainName;
 
@@ -26,7 +26,7 @@ class ProfileScreen extends StatelessWidget {
     required this.selectedChainName,
   });
 
-  // BADGE DEFINITIONS (ENGLISH)
+  // BADGE TANIMLARI (İngilizce)
   static const List<Map<String, dynamic>> allBadges = [
     {
       'id': 'Newbie',
@@ -86,7 +86,7 @@ class ProfileScreen extends StatelessWidget {
     },
   ];
 
-  // --- LOGOUT LOGIC ---
+  // --- ÇIKIŞ YAPMA ---
   Future<void> _logout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
     if (!context.mounted) return;
@@ -96,7 +96,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // --- BADGE DETAIL POP-UP ---
+  // --- BADGE DETAY PENCERESİ ---
   void _showBadgeDetail(
       BuildContext context, Map<String, dynamic> badge, bool isEarned) {
     showDialog(
@@ -163,7 +163,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // --- BADGE GALLERY POP-UP ---
+  // --- BADGE GALERİSİ ---
   void _showBadgeGallery(BuildContext context, UserModel user) {
     showDialog(
       context: context,
@@ -233,7 +233,6 @@ class ProfileScreen extends StatelessWidget {
   }
 
   // --- BOTTOM BAR (NAVIGATION) ---
-// --- BOTTOM BAR (NAVIGATION) ---
   Widget _buildBottomBar(BuildContext context) {
     return Container(
       height: 85,
@@ -250,21 +249,17 @@ class ProfileScreen extends StatelessWidget {
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ChainTimerScreen(
-                    chainId: selectedChainId,
-                    chainName: selectedChainName,
-                  ),
+                  // 🔥 DÜZELTİLEN KISIM: Parametreler silindi
+                  builder: (_) => const TimerScreen(),
                 ),
               );
             },
             icon: const Icon(Icons.timer, color: Colors.white70, size: 30),
           ),
 
-          // 2. ORTA: HOME Butonu (Daha büyük ve öne çıkan tasarım)
+          // 2. ORTA: HOME Butonu
           GestureDetector(
             onTap: () {
-              // Eğer zaten HomeScreen'de olsaydık (bu sayfa Profile olduğu için değiliz) 
-              // direkt yönlendiriyoruz ve stack'i temizliyoruz.
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(
@@ -291,14 +286,15 @@ class ProfileScreen extends StatelessWidget {
                 ],
                 border: Border.all(color: Colors.white24, width: 2),
               ),
-              child: const Icon(Icons.home_filled, color: Colors.white, size: 32),
+              child:
+                  const Icon(Icons.home_filled, color: Colors.white, size: 32),
             ),
           ),
 
           // 3. SAĞ: PROFILE Butonu (Aktif Sayfa)
           IconButton(
             onPressed: () {
-              // Zaten Profile sayfasındayız, hiçbir şey yapma.
+              // Zaten Profile sayfasındayız, işlem yok.
             },
             icon: const Icon(Icons.person, color: Color(0xFFA68FFF), size: 32),
           ),
@@ -307,7 +303,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // --- UI HELPERS ---
+  // --- UI YARDIMCILARI ---
   Widget _buildGlassContainer(
       {required Widget child, EdgeInsetsGeometry? padding}) {
     return ClipRRect(
@@ -376,7 +372,7 @@ class ProfileScreen extends StatelessWidget {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // Background Gradient
+            // Arka Plan Gradient
             Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -391,7 +387,7 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
 
-            // Content
+            // İçerik
             SafeArea(
               child: StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance
@@ -416,7 +412,7 @@ class ProfileScreen extends StatelessWidget {
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       children: [
-                        // Avatar Section
+                        // Avatar
                         Stack(
                           alignment: Alignment.bottomRight,
                           children: [
