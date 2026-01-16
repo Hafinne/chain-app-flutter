@@ -15,64 +15,59 @@ class FirestoreService {
   // --- 2. KULLANICI TAKİBİ (STREAM) ---
   Stream<UserModel> streamUser(String uid) {
     return _db.collection('users').doc(uid).snapshots().map((snapshot) {
-      if (!snapshot.exists)
+      if (!snapshot.exists) {
         return UserModel(uid: 'error', email: '', name: 'Error');
+      }
       return UserModel.fromFirestore(snapshot);
     });
   }
 
-  // --- 3. ZİNCİR KONTROL ROBOTU (AÇILIŞTA ÇALIŞIR) ---
+  // --- 3. ZİNCİR KONTROL ROBOTU (AÇILIŞTA ÇALIŞIR - DÜZELTİLDİ) ---
+  // 🔥 BU FONKSİYON ARTIK GÜNÜ SIFIRLAR VE ZİNCİRİ KIRAR
   Future<void> checkChainsOnAppStart(String userId) async {
     try {
       final snapshot = await _db
           .collection('chains')
           .where('members', arrayContains: userId)
           .get();
-      final now = DateTime.now();
 
       for (var doc in snapshot.docs) {
         final chainId = doc.id;
         final data = doc.data();
-        final String status = data['status'] ?? 'active';
 
-        // Kırıksa atla
-        if (status == 'broken') continue;
+        // Son aktivite tarihini al (PerformCheckIn'de kaydediyoruz)
+        Timestamp? lastActivityTs = data['lastActivityDate'];
 
-        // Son logu bul
-        final logsSnapshot = await _db
-            .collection('chains')
-            .doc(chainId)
-            .collection('logs')
-            .where('userId', isEqualTo: userId)
-            .orderBy('logDate', descending: true)
-            .limit(1)
-            .get();
+        // Eğer tarih yoksa (yeni zincirse) veya işlem yapılmamışsa geç
+        if (lastActivityTs == null) continue;
 
-        DateTime? lastCheckIn;
-        if (logsSnapshot.docs.isNotEmpty) {
-          lastCheckIn =
-              (logsSnapshot.docs.first['logDate'] as Timestamp).toDate();
+        DateTime lastActivity = lastActivityTs.toDate();
+        DateTime now = DateTime.now();
+
+        // Tarihleri sadece Yıl/Ay/Gün olarak karşılaştır (Saat farkını yoksay)
+        DateTime lastDate =
+            DateTime(lastActivity.year, lastActivity.month, lastActivity.day);
+        DateTime today = DateTime(now.year, now.month, now.day);
+
+        // Fark kaç gün?
+        int difference = today.difference(lastDate).inDays;
+
+        // SENARYO A: YENİ GÜN BAŞLAMIŞ (Fark >= 1)
+        if (difference >= 1) {
+          // Listeyi temizle ki buton tekrar aktif olsun
+          await _db.collection('chains').doc(chainId).update({
+            'membersCompletedToday': [],
+          });
         }
 
-        if (lastCheckIn == null) continue; // Yeni zincir, henüz işlem yok
-
-        // Gün farkı hesapla
-        final difference = now.difference(lastCheckIn).inDays;
-
-        if (difference == 0) continue; // Bugün yapılmış
-
-        // CEZA MANTIĞI
-        if (difference == 2) {
-          // 2 gün girmemiş -> -30 XP Ceza
-          await _applyXPChange(userId, -30);
-          print("⚠️ Uyarı: $chainId için 2 gün atlandı! -30 XP");
-        } else if (difference >= 3) {
-          // 3+ gün -> ZİNCİR KIRILDI
+        // SENARYO B: ZİNCİR KIRILMIŞ (Fark > 1, yani dün yapılmamış)
+        if (difference > 1 && data['status'] == 'active') {
           await _db.collection('chains').doc(chainId).update({
             'status': 'broken',
+            'streakCount': 0, // Seriyi sıfırla
             'brokenAt': FieldValue.serverTimestamp(),
           });
-          print("☠️ Zincir Kırıldı: $chainId");
+          print("☠️ Zincir Kırıldı: $chainId (Fark: $difference gün)");
         }
       }
     } catch (e) {
@@ -80,7 +75,7 @@ class FirestoreService {
     }
   }
 
-  // --- 4. CHECK-IN YAPMA ---
+  // --- 4. CHECK-IN YAPMA (GÜNCELLENDİ) ---
   Future<void> performCheckIn(
       String chainId, String userId, ChainLog logData) async {
     final chainRef = _db.collection('chains').doc(chainId);
@@ -92,17 +87,18 @@ class FirestoreService {
 
       List members = data['members'] ?? [];
       List completedToday = data['membersCompletedToday'] ?? [];
-      List history =
-          data['completedDates'] ?? []; // ["2026-01-11", "2026-01-12"] gibi
 
       if (completedToday.contains(userId)) return;
 
       // 1. Kullanıcıyı bugünkü listeye ekle
+      // 🔥 ÖNEMLİ: 'lastActivityDate' alanını güncelliyoruz ki Robot çalışsın
       transaction.update(chainRef, {
         'membersCompletedToday': FieldValue.arrayUnion([userId]),
+        'lastActivityDate': FieldValue.serverTimestamp(), // Tarihi kaydet
+        'status': 'active', // Kırıksa düzelt
       });
 
-      // 2. EĞER HERKES TAMAMLADIYSA: Streak artır ve tarihi tarihe ekle
+      // 2. EĞER HERKES TAMAMLADIYSA: Streak artır
       if (completedToday.length + 1 == members.length) {
         transaction.update(chainRef, {
           'streakCount': FieldValue.increment(1),
@@ -110,10 +106,10 @@ class FirestoreService {
         });
       }
 
-      // Bireysel logu ekle
+      // Log kaydı oluştur
       transaction.set(chainRef.collection('logs').doc(), logData.toMap());
 
-      // 5. XP Uygula
+      // 3. XP Uygula
       await _applyXPChange(userId, 10);
     });
   }
@@ -128,9 +124,9 @@ class FirestoreService {
 
       int currentXp = snapshot.data()?['xp'] ?? 0;
       int newXp = currentXp + amount;
-      if (newXp < 0) newXp = 0; // Eksiye düşmesin
+      if (newXp < 0) newXp = 0;
 
-      // Rozet Hesapla
+      // Rozet Hesapla (Senin mantığın korundu)
       String newBadge = "Rookie";
       if (newXp >= 10000)
         newBadge = "Legend";
@@ -149,7 +145,7 @@ class FirestoreService {
     });
   }
 
-  // --- DİĞER METOTLAR ---
+  // --- DİĞER METOTLAR (AYNEN KORUNDU) ---
   Stream<List<ChainModel>> streamUserChains(String userId) {
     return _db
         .collection('chains')
@@ -159,21 +155,17 @@ class FirestoreService {
             s.docs.map((d) => ChainModel.fromMap(d.id, d.data())).toList());
   }
 
-  // --- ZİNCİRDEN ÜYE ATMA (KICK MEMBER) ---
+  // ZİNCİRDEN ÜYE ATMA
   Future<void> removeMember(String chainId, String memberId) async {
-    // Zincirin 'members' listesinden bu ID'yi sil
     await _db.collection('chains').doc(chainId).update({
       'members': FieldValue.arrayRemove([memberId])
     });
   }
 
-  // --- 5. DÜRTME (NUDGE) SİSTEMİ [GÜNCELLENDİ] ---
+  // 5. DÜRTME (NUDGE) SİSTEMİ
   Future<void> sendNudge(String senderId, String receiverId, String chainId,
       String chainName, String message) async {
-    // 🔥 'message' parametresi eklendi
-
     try {
-      // Doğrudan kullanıcının bildirim kutusuna ekliyoruz
       await _db
           .collection('users')
           .doc(receiverId)
@@ -183,11 +175,10 @@ class FirestoreService {
         'fromUserId': senderId,
         'chainId': chainId,
         'chainName': chainName,
-        'message': message, // 🔥 Mesaj kaydediliyor
+        'message': message,
         'timestamp': FieldValue.serverTimestamp(),
         'isRead': false,
       });
-
       print("Dürtme gönderildi! 🔔");
     } catch (e) {
       print("Dürtme hatası: $e");
@@ -195,11 +186,9 @@ class FirestoreService {
     }
   }
 
-  // --- 6. SIRALAMA HESAPLAMA (RANK) ---
-  // Mantık: Benden daha yüksek XP'ye sahip kaç kişi var? + 1
+  // 6. SIRALAMA HESAPLAMA (RANK)
   Future<int> getUserRank(int myXp) async {
     try {
-      // XP'si benim XP'mden büyük olan kullanıcıları say
       AggregateQuerySnapshot query = await _db
           .collection('users')
           .where('xp', isGreaterThan: myXp)
@@ -207,12 +196,10 @@ class FirestoreService {
           .get();
 
       int count = query.count ?? 0;
-
-      // Sıralamam = Benden iyilerin sayısı + 1
       return count + 1;
     } catch (e) {
       print("Sıralama hatası: $e");
-      return 0; // Hata olursa 0 dönsün
+      return 0;
     }
   }
 }

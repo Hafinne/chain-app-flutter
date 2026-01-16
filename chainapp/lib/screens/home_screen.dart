@@ -1,4 +1,4 @@
-import 'dart:async'; // StreamSubscription için
+import 'dart:async'; // StreamSubscription ve Timer için
 import 'dart:ui'; // Glassmorphism efektleri için
 import 'dart:convert'; // JSON işlemleri için
 import 'dart:math'; // Konfeti yönü için
@@ -45,8 +45,12 @@ class _HomeScreenState extends State<HomeScreen> {
   // Motivasyon Sözü Değişkeni
   Future<Map<String, String>>? _dailyQuote;
 
-  // 🔥 KONFETİ KONTROLCÜSÜ
+  // Konfeti Kontrolcüsü
   late ConfettiController _confettiController;
+
+  // 🔥 GERİ SAYIM SAYACI İÇİN DEĞİŞKENLER
+  Timer? _dayTimer;
+  String _timeLeftString = "";
 
   @override
   void initState() {
@@ -58,13 +62,47 @@ class _HomeScreenState extends State<HomeScreen> {
     _listenForNudges();
     // Sözü çek
     _dailyQuote = _fetchDailyQuote();
+
+    // 🔥 SAYACI BAŞLAT
+    _startDayCountdown();
   }
 
   @override
   void dispose() {
     _nudgeSubscription?.cancel();
-    _confettiController.dispose(); // 🔥 Hafızayı temizle
+    _confettiController.dispose();
+    _dayTimer?.cancel(); // 🔥 Timer'ı durdur
     super.dispose();
+  }
+
+  // 🔥 GÜN SONUNA NE KADAR KALDI HESAPLAYAN FONKSİYON
+  void _startDayCountdown() {
+    // İlk hesaplama hemen yapılsın
+    _updateTimeLeft();
+
+    // Her dakikada bir güncelle
+    _dayTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      _updateTimeLeft();
+    });
+  }
+
+  void _updateTimeLeft() {
+    final now = DateTime.now();
+    // Bugünün sonu (23:59:59)
+    final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    final difference = endOfDay.difference(now);
+
+    if (difference.isNegative) {
+      setState(() {
+        _timeLeftString = "Day Ended";
+      });
+    } else {
+      setState(() {
+        _timeLeftString =
+            "${difference.inHours}h ${difference.inMinutes % 60}m left";
+      });
+    }
   }
 
   // --- API'DEN SÖZ ÇEKME ---
@@ -195,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
             userId: userId, logDate: DateTime.now(), note: "Manual Check-in");
         await _firestoreService.performCheckIn(chain.id, userId, newLog);
 
-        // 🔥 PLAY CONFETTI ON SUCCESS
+        // Konfeti Patlat
         _confettiController.play();
       } catch (e) {
         if (!mounted) return;
@@ -651,6 +689,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         const SizedBox(height: 30),
+
+                        // 🔥 ANA AKSİYON KARTI VE SAYACI
                         GestureDetector(
                           onTap: (isBroken || !isCompletedToday)
                               ? () => _handleAction(chain)
@@ -710,12 +750,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                                       ? Colors.redAccent
                                                       : Colors.white54,
                                                   fontSize: 12)),
+
+                                          // 🔥 BURADA GÖREV ADINI VE GERİ SAYIMI GÖSTERİYORUZ
                                           Text(
                                               isBroken
                                                   ? "Tap to Repair (50 XP)"
-                                                  : (chain.purpose.isNotEmpty
-                                                      ? chain.purpose
-                                                      : chain.name),
+                                                  : (isCompletedToday
+                                                      ? "Completed! 🎉"
+                                                      : (chain.purpose
+                                                              .isNotEmpty
+                                                          ? chain.purpose
+                                                          : chain.name)),
                                               style: TextStyle(
                                                   color: isCompletedToday
                                                       ? Colors.white
@@ -728,12 +773,29 @@ class _HomeScreenState extends State<HomeScreen> {
                                                           .lineThrough
                                                       : null),
                                               maxLines: 1,
-                                              overflow: TextOverflow.ellipsis)
+                                              overflow: TextOverflow.ellipsis),
+
+                                          // 🔥 SAYAÇ EKLENDİ (SADECE GÖREV BİTMEDİYSE VE KIRIK DEĞİLSE GÖRÜNÜR)
+                                          if (!isCompletedToday && !isBroken)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  top: 4.0),
+                                              child: Text(
+                                                "⏳ $_timeLeftString", // Geri sayım
+                                                style: const TextStyle(
+                                                    color: Color(
+                                                        0xFFA68FFF), // Tema rengi
+                                                    fontSize: 12,
+                                                    fontWeight:
+                                                        FontWeight.bold),
+                                              ),
+                                            )
                                         ]))
                                   ])),
                             ),
                           ),
                         ),
+
                         const SizedBox(height: 30),
                         const Text("Team Status",
                             style: TextStyle(
@@ -800,7 +862,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 30),
 
-                        // 🔥 MOTIVATION QUOTE CARD
+                        // MOTIVATION QUOTE CARD
                         FutureBuilder<Map<String, String>>(
                           future: _dailyQuote,
                           builder: (context, quoteSnapshot) {
