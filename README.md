@@ -4,13 +4,7 @@ Chain is a productivity app that reimagines the "Break the Chain" method for gro
 
 **Chain**, bireysel alışkanlık takibini **sosyal sorumluluk** ile birleştiren bir mobil uygulamadır. 3-5 kişilik gruplar halinde tek bir hedefe kilitlenirsiniz. Kural basit: **Biri zinciri kırarsa, herkesin zinciri sıfırlanır.**
 
-## 📱 Uygulama İçi Görseller
 
-| Ana Sayfa & Zincirler | Detay & Davet Kodu | Odak Modu (Timer) | Profil & Rozetler |
-|:---:|:---:|:---:|:---:|
-| <img src="screenshots/home.png" width="180"/> | <img src="screenshots/detail.png" width="180"/> | <img src="screenshots/focus.png" width="180"/> | <img src="screenshots/profile.png" width="180"/> |
-
----
 ## ✨ Öne Çıkan Özellikler
 
 ### 🤝 Sosyal Özellikler
